@@ -1,4 +1,5 @@
 <script>
+    import { onMount, onDestroy, afterUpdate } from "svelte";
     const gameState = {
       "gameState": {
         "map": {
@@ -10,7 +11,7 @@
             { "x": 150, "y": 350 },
             { "x": 150, "y": 550 },
             { "x": 700, "y": 550 },
-            { "x": 700, "y": 50 },
+            { "x": 700, "y": 50 }
           ],
           "dimensions": { "width": 800, "height": 600 }
         },
@@ -63,6 +64,46 @@
         ]
       }
     };
+
+    let socket;
+
+
+    onMount(async () => {
+    await initializeWebSocketConn();
+
+  });
+
+
+  async function initializeWebSocketConn() {
+    socket = await new WebSocket(`ws://localhost:8088/game`);
+
+    socket.onmessage = (event) => {
+          const messages = JSON.parse(event.data);
+          console.log("GameState",messages)
+        };
+
+    socket.onclose = async (event) => {
+      console.log("WebSocket connection closed:", event.reason);
+    };
+
+    socket.onerror = async (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    socket.onopen = async () => {
+      console.log("WebSocket connection established");
+      console.log('sent getAll')
+
+    }
+
+  }
+
+
+
+
+
+
+
   
     const { path, dimensions } = gameState.gameState.map;
     const towers = gameState.gameState.players.defenders.flatMap(player => player.placedTowers);
@@ -146,8 +187,6 @@
       }
     }
   
-    // When the component mounts, initialize canvas
-    import { onMount } from 'svelte';
     let canvas;
     onMount(() => {
       const ctx = canvas.getContext('2d');
