@@ -1,0 +1,9 @@
+spring.application.name: oauth-client-spring
+spring.security.oauth2.client:
+  provider.tanie-balony-keycloak.issuer-uri: "http://localhost:8080/realms/TanieBalony"
+  registration.keycloak:
+    provider: tanie-balony-keycloak
+    authorization-grant-type: authorization_code
+    client-id: oauth-client-spring
+    client-secret: password
+    scope: openid
