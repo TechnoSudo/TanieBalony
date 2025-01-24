@@ -25,5 +25,20 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
 
+  keycloak-config-cli:
+    build: .
+    image: adorsys/keycloak-config-cli:latest
+    depends_on:
+      - keycloak
+    volumes:
+      - ./contrib/example-config:/config
+    environment:
+      - keycloak.url=http://keycloak:8080
+      - keycloak.user=admin
+      - keycloak.password=admin123
+      - keycloak.availability-check.enabled=true
+      - spring.profiles.active=dev
+      - import.cache.enabled=false
+
 volumes:
   db-data:
