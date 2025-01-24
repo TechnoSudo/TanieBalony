@@ -4,6 +4,8 @@ import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -17,9 +19,13 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
         this.webClientBuilder = webClientBuilder;
     }
 
+
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
+
+
+
             if (!exchange.getRequest().getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
                 throw new RuntimeException("Missing authorization information");
             }
