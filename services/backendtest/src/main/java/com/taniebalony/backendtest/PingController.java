@@ -16,7 +16,8 @@ public class PingController {
         return "ping2";
     }
     @GetMapping("/api/ping")
-    String ping3() {
+    String ping3(HttpEntity<String> httpEntity) {
+        String json = httpEntity.getBody();
         return "ping3";
     }
 }
