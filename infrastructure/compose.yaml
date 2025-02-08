@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.7
@@ -12,9 +10,14 @@ services:
       - KC_DB_URL=jdbc:postgresql://db:5432/awasome
       - KC_DB_USERNAME=admin
       - KC_DB_PASSWORD=admin
+      - KC_FILE=/opy/keycloak/conf/Users-realm.json
+    volumes:
+      - ./contrib/example-config:/opt/keycloak/conf
     depends_on:
       - db
-    command: start-dev
+    command: "start-dev --health-enabled=true"
+    networks:
+      - inner_network
 
   db:
     image: postgres:17
@@ -24,21 +27,30 @@ services:
       POSTGRES_PASSWORD: admin
     volumes:
       - db-data:/var/lib/postgresql/data
+    networks:
+      - inner_network
 
   keycloak-config-cli:
-    build: .
     image: adorsys/keycloak-config-cli:latest
     depends_on:
       - keycloak
     volumes:
       - ./contrib/example-config:/config
     environment:
-      - keycloak.url=http://keycloak:8080
-      - keycloak.user=admin
-      - keycloak.password=admin123
-      - keycloak.availability-check.enabled=true
-      - spring.profiles.active=dev
-      - import.cache.enabled=false
-
+      - KEYCLOAK_URL="http://172.22.0.1:8080"
+      - KEYCLOAK_USER=admin
+      - KEYCLOAK_PASSWORD=admin
+      - EYCLOAK_AVAILABILITYCHECK_ENABLED
+      - SPRING_PROFILES_ACTIVE
+      - DEBUG
+    networks:
+      - inner_network
 volumes:
   db-data:
+
+networks:
+  inner_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
