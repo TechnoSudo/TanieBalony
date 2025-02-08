@@ -1,57 +1,50 @@
 package com.taniebalony.gateway;
 
+import java.security.Principal;
+
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
-import org.springframework.http.HttpHeaders;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Component
 public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> {
 
-    private final WebClient.Builder webClientBuilder;
-
     public AuthFilter(WebClient.Builder webClientBuilder) {
         super(Config.class);
-        this.webClientBuilder = webClientBuilder;
     }
-
 
     @Override
     public GatewayFilter apply(Config config) {
-        return (exchange, chain) -> {
+        return (exchange, chain) -> exchange.getPrincipal()
+                .map(Principal::getName)
+                .defaultIfEmpty("Default User")
+                .map(userName -> {
+                    //adds header to proxied request
+                    System.out.println("Config value ="+config.value);
+                    exchange.getRequest().mutate().header(config.value,
+                            userName).build();
+                    System.out.println("Config First pre header filter" +
+                            exchange.getRequest().getHeaders());
+                    return exchange;
+                })
+                .flatMap(chain::filter);
+    }
 
-
-
-            if (!exchange.getRequest().getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
-                throw new RuntimeException("Missing authorization information");
-            }
-
-            String authHeader = exchange.getRequest().getHeaders().get(HttpHeaders.AUTHORIZATION).get(0);
-
-            String[] parts = authHeader.split(" ");
-
-            if (parts.length != 2 || !"Bearer".equals(parts[0])) {
-                throw new RuntimeException("Incorrect authorization structure");
-            }
-
-            return webClientBuilder.build()
-                    .post()
-                    .uri("http://service-users/users/validateToken?token=" + parts[1])
-                    .retrieve().bodyToMono(UserDto.class)
-                    .map(userDto -> {
-                        exchange.getRequest()
-                                .mutate()
-                                .header("X-auth-user-id", String.valueOf(userDto.getId()));
-                        return exchange;
-                    }).flatMap(chain::filter);
-        };
+    @Override
+    public Config newConfig() {
+        return new Config();
     }
 
     public static class Config {
-        // empty class as I don't need any particular configuration
+        private String value;
+
+        public String getValue() {
+            return value;
+        }
+
+        public void setValue(String value) {
+            this.value = value;
+        }
     }
 }
