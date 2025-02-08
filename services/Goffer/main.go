@@ -1,12 +1,15 @@
 package main
 
 import (
+	// "crypto/rand"
+	// "math/rand"
 	"encoding/json"
+	"fmt"
 	"log/slog"
-	"log"
 	"net/http"
+	"os"
 
-	// "slog"
+	// "logger"
 	// "os"
 	"sync"
 	"time"
@@ -16,7 +19,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-
 	// "gorm.io/gorm"
 )
 
@@ -27,6 +29,8 @@ const (
 
 type MetaMessage struct {
 	Operation    string           `json:"operation"`
+	Tower        custom.Tower     `json:"tower"`
+	Enemy        custom.Enemy     `json:"enemy"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -97,13 +101,68 @@ type ConnectionManager struct {
 	Connections    sync.Map //userId to websocketConn
 	Games		   custom.SafeMap //gameId to jsonState
 	Players 	   sync.Map //userId to gameId
+	isUpdated 	   bool
+	updateMutex    sync.Mutex
+}
+func (connectionManager* ConnectionManager) BackgroundLogic() {
+	lvl := new(slog.LevelVar)
+	lvl.Set(slog.LevelDebug)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout,  &slog.HandlerOptions{
+		Level: lvl,
+	}))
+	//update game state, send updated state
+	fpsTicker := time.NewTicker(100 * time.Millisecond)
+
+	func() {
+		for {
+			select {
+				case <- fpsTicker.C:
+					var games = connectionManager.Games.GetGames()
+					println("games:", games)
+					for gameId :=  range games {
+						println("moving time for ", gameId)
+						connectionManager.Games.MoveTime(gameId)
+
+						println("getGamestate")
+						data:= connectionManager.Games.GetGameState(gameId)
+						jsonData, _ := json.Marshal(data)
+
+						println("get players")
+						var players = connectionManager.Games.GetPlayers(gameId)
+						println("got players", players)
+						for userId := range players {
+							println("userId: ",userId)
+							retrieved_conn, ok := connectionManager.Connections.Load(userId)
+							if !ok {
+								logger.Error("No active connection found for userId:", userId)
+								break
+							}
+							conn, ok := retrieved_conn.(*websocket.Conn) 
+							if err := conn.WriteMessage(websocket.TextMessage, jsonData); err != nil {
+								logger.Error("Error sending game status:	", err)
+							}
+		
+						}
+					}
+					logger.Debug("mainloop")
+				
+	
+		}
+		}
+	}()
+	fpsTicker.Stop()
 }
 
-
 func (connectionManager* ConnectionManager) HandleWebSocketConn(w http.ResponseWriter, r *http.Request) {
+	lvl := new(slog.LevelVar)
+	lvl.Set(slog.LevelDebug)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout,  &slog.HandlerOptions{
+		Level: lvl,
+	}))
 
 	// var userId string = r.URL.Query().Get("userId");
-	var userId = "test1"
+	var userId int = 0
+	println(userId)
 
 
 	//verify TODO
@@ -112,21 +171,21 @@ func (connectionManager* ConnectionManager) HandleWebSocketConn(w http.ResponseW
 
 	//add to game;
 	var gameId int
-	gameId, err := connectionManager.Games.GetFreeGame()
 	
-	if err {
-		// add to game
-		gameId = connectionManager.Games.StartNewGame()
-
+	gameId, err2 := connectionManager.Games.GetFreeGame(userId)
+	
+	if err2 {
+		gameId = connectionManager.Games.StartNewGame(userId)
 	}
 	connectionManager.Players.Store(userId, gameId)
 
-
-	// start websocket
-	conn, err2 := upgrader.Upgrade(w, r, nil)
-
-	if err2 != nil {
-		log.Println("Error upgrading to WebSocket:", err)
+	conn, err := upgrader.Upgrade(w, r, nil)
+	
+	connectionManager.Connections.Store(userId, conn)
+	logger.Debug("Storing connection for userId: ", userId)
+	// defer connectionManager.Connections.Delete(userId)
+	if err != nil {
+		logger.Error("Error upgrading to WebSocket:", err)
 		return
 	}
 
@@ -138,9 +197,8 @@ func (connectionManager* ConnectionManager) HandleWebSocketConn(w http.ResponseW
 		defer conn.Close()
 
 		ticker := time.NewTicker(websocketLifetime)
-		fpsTicker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
 
+		defer ticker.Stop()
 
 		for {
 			// channels for websocket signals
@@ -159,20 +217,35 @@ func (connectionManager* ConnectionManager) HandleWebSocketConn(w http.ResponseW
 
 			select {
 				case <-ticker.C:
-					log.Println("Websocket timeout reached. Closing the WebSocket connection.")
+					logger.Error("Websocket timeout reached. Closing the WebSocket connection.")
 					conn.Close()
 					return
-				case <-fpsTicker.C:
-					slog.Info("mainloop")
-					data:= connectionManager.Games.GetGameState(gameId)
-					jsonData, _ := json.Marshal(data)
-					if err := conn.WriteMessage(websocket.TextMessage, jsonData); err != nil {
-						slog.Error("Error sending game status:	", err)
+				case msg := <-messageChan:
+					logger.Info("Got message from client on websocket")
+					var newReceivedMessage MetaMessage
+					err = json.Unmarshal(msg, &newReceivedMessage)
+					if err != nil {
+						// If there's an error parsing JSON, respond with an error message
+						slog.Error("Error parsing JSON:", err)
+						slog.Error(newReceivedMessage.Operation, newReceivedMessage.Enemy, newReceivedMessage.Tower)
+						errorMessage := fmt.Sprintf("Error: Invalid JSON format: %v", err)
+						if err := conn.WriteMessage(websocket.TextMessage, []byte(errorMessage)); err != nil {
+							slog.Error("Error sending error message:", err)
+						}
+						continue
+					} else {
+						// process correct message
+						slog.Info("Processing correct message")
+						slog.Info(newReceivedMessage.Operation)
+						// TODO add error checking below
+						if newReceivedMessage.Operation == "addTower" {
+							connectionManager.Games.AddTower(gameId, newReceivedMessage.Tower)
+						} else if newReceivedMessage.Operation == "addEnemy" {
+							connectionManager.Games.AddEnemy(gameId, newReceivedMessage.Enemy)
+						}
 					}
-				case _ = <-messageChan:
-					slog.Info("Got message from client on websocket")
 				case err := <-errorChan:
-					log.Println("Error reading message:", err)
+					logger.Error("Error reading message:", err)
 					conn.Close()
 					return
 			}
@@ -193,9 +266,9 @@ func main() {
 
 	mainRouter.HandleFunc("/game", connectionManager.HandleWebSocketConn)
 	http.Handle("/game", r)
-
+	go  connectionManager.BackgroundLogic()
 	slog.Info("WebSocket server started on :" + port + " on /game endpoint")
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal("ListenAndServe:", err)
+		slog.Error("ListenAndServe:", err)
 	}
 }
