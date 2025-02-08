@@ -48,7 +48,7 @@ services:
       keycloak:
         condition: service_healthy
     volumes:
-      - ./config/keycloak-config.json:/config/keycloak-config.json
+      - ./config:/config
     environment:
       - KEYCLOAK_URL=http://172.22.0.1:8080
       - KEYCLOAK_USER=admin
@@ -56,7 +56,7 @@ services:
       - EYCLOAK_AVAILABILITYCHECK_ENABLED
       - SPRING_PROFILES_ACTIVE=dev
       - DEBUG=true
-      - IMPORT_FILES_LOCATIONS=/config/keycloak-config.json
+      - IMPORT_FILES_LOCATIONS=/config/*
 
     networks:
       - inner_network
