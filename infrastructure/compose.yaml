@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.7
@@ -12,6 +10,9 @@ services:
       - KC_DB_URL=jdbc:postgresql://db:5432/awasome
       - KC_DB_USERNAME=admin
       - KC_DB_PASSWORD=admin
+      - KC_FILE=/opy/keycloak/conf/Users-realm.json
+    volumes:
+      - ./contrib/example-config:/opt/keycloak/conf
     depends_on:
       - db
     command: start-dev
@@ -35,10 +36,11 @@ services:
     environment:
       - keycloak.url=http://keycloak:8080
       - keycloak.user=admin
-      - keycloak.password=admin123
+      - keycloak.password=admin
       - keycloak.availability-check.enabled=true
       - spring.profiles.active=dev
       - import.cache.enabled=false
+    command:
 
 volumes:
   db-data:
