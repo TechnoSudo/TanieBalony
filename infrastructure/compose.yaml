@@ -16,6 +16,8 @@ services:
     depends_on:
       - db
     command: start-dev
+    networks:
+      - inner_network
 
   db:
     image: postgres:17
@@ -25,22 +27,30 @@ services:
       POSTGRES_PASSWORD: admin
     volumes:
       - db-data:/var/lib/postgresql/data
+    networks:
+      - inner_network
 
   keycloak-config-cli:
-    build: .
     image: adorsys/keycloak-config-cli:latest
     depends_on:
       - keycloak
     volumes:
       - ./contrib/example-config:/config
     environment:
-      - keycloak.url=http://keycloak:8080
+      - keycloak.url="http://172.22.0.1:8080"
       - keycloak.user=admin
       - keycloak.password=admin
       - keycloak.availability-check.enabled=true
       - spring.profiles.active=dev
       - import.cache.enabled=false
-    command:
-
+    networks:
+      - inner_network
 volumes:
   db-data:
+
+networks:
+  inner_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
