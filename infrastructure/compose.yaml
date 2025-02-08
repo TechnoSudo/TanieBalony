@@ -15,7 +15,7 @@ services:
       - ./contrib/example-config:/opt/keycloak/conf
     depends_on:
       - db
-    command: start-dev
+    command: "start-dev --health-enabled=true"
     networks:
       - inner_network
 
@@ -37,12 +37,12 @@ services:
     volumes:
       - ./contrib/example-config:/config
     environment:
-      - keycloak.url="http://172.22.0.1:8080"
-      - keycloak.user=admin
-      - keycloak.password=admin
-      - keycloak.availability-check.enabled=true
-      - spring.profiles.active=dev
-      - import.cache.enabled=false
+      - KEYCLOAK_URL="http://172.22.0.1:8080"
+      - KEYCLOAK_USER=admin
+      - KEYCLOAK_PASSWORD=admin
+      - EYCLOAK_AVAILABILITYCHECK_ENABLED
+      - SPRING_PROFILES_ACTIVE
+      - DEBUG
     networks:
       - inner_network
 volumes:
