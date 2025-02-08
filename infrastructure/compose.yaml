@@ -3,11 +3,14 @@ services:
     image: quay.io/keycloak/keycloak:26.0.7
     ports:
       - "8080:8080"
+      - "9000:9000"
+
     environment:
       - KC_BOOTSTRAP_ADMIN_USERNAME=admin
       - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
       - KC_DB=postgres
       - KC_DB_URL=jdbc:postgresql://db:5432/awasome
+      - KC_HEALTH_ENABLED=true
       - KC_DB_USERNAME=admin
       - KC_DB_PASSWORD=admin
       - KC_FILE=/opy/keycloak/conf/Users-realm.json
@@ -15,7 +18,16 @@ services:
       - ./contrib/example-config:/opt/keycloak/conf
     depends_on:
       - db
-    command: "start-dev --health-enabled=true"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'exec 3<>/dev/tcp/localhost/9000; echo -e "GET /health/ready HTTP/1.1\nhost: localhost:9000\n" >&3; timeout --preserve-status 1 cat <&3 | grep -m 1 status | grep -m 1 UP; ERROR=$?; exec 3<&-; exec 3>&-; exit $ERROR'
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: "start-dev --health-enabled=true --metrics-enabled=true"
     networks:
       - inner_network
 
@@ -33,18 +45,22 @@ services:
   keycloak-config-cli:
     image: adorsys/keycloak-config-cli:latest
     depends_on:
-      - keycloak
+      keycloak:
+        condition: service_healthy
     volumes:
-      - ./contrib/example-config:/config
+      - ./config/keycloak-config.json:/config/keycloak-config.json
     environment:
-      - KEYCLOAK_URL="http://172.22.0.1:8080"
+      - KEYCLOAK_URL=http://172.22.0.1:8080
       - KEYCLOAK_USER=admin
       - KEYCLOAK_PASSWORD=admin
       - EYCLOAK_AVAILABILITYCHECK_ENABLED
-      - SPRING_PROFILES_ACTIVE
-      - DEBUG
+      - SPRING_PROFILES_ACTIVE=dev
+      - DEBUG=true
+      - IMPORT_FILES_LOCATIONS=/config/keycloak-config.json
+
     networks:
       - inner_network
+
 volumes:
   db-data:
 
